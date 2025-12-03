@@ -1,4 +1,23 @@
+# Ignore everything
+/*
+
+# But not these directories
+!/scripts/
+!/src/
+
+# Ignore Python cache files
 __pycache__/
-results/
-prompts/
-.DS_Store
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignore README.md (we'll add it separately)
+!README.md
+!.gitignore
+
+# Track environment files
+!environment.yml
+!environment.lock.yml
+# Ignore temporary scratch area
+scratch/
