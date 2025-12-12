@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --partition=defq
-#SBATCH --job-name=zip_label_ground_truth
+#SBATCH --job-name=zip_ground_truth_labeling
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-gpu=12
-#SBATCH --output=/home/rohin/ZIP/logs/zip_label_ground_truth.out
-#SBATCH --error=/home/rohin/ZIP/logs/zip_label_ground_truth.err
+#SBATCH --output=/home/rohin/ZIP/logs/zip_ground_truth_labeling.out
+#SBATCH --error=/home/rohin/ZIP/logs/zip_ground_truth_labeling.err
 #SBATCH --account=liquidai
 #SBATCH --exclude=liquid-gpu-[054]
 
@@ -71,13 +71,13 @@ task="correctness"
 
 base_name=$(basename $data_path .parquet)
 
-echo "Starting label_and_evaluate with ground truth:"
+echo "Starting evaluate_and_label_rollouts with ground truth:"
 echo "  Data: $data_path"
 echo "  Task: $task"
 echo "  Start time: $(date)"
 echo
 
-python3 -u src/label_and_evaluate.py \
+python3 -u src/evaluate_and_label_rollouts.py \
     --data "$data_path" \
     --task "$task" \
     --show-examples \

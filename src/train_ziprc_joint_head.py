@@ -16,13 +16,13 @@ This joint distribution approach enables:
 
 Example usage:
     # Binary correctness (default)
-    python train.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
-                    --weights_path models/zip_model --data_path data/data.parquet
-    
+    python train_ziprc_joint_head.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+                                     --weights_path models/zip_model --data_path data/data.parquet
+
     # Custom reward values (e.g., 5-level quality score)
-    python train.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
-                    --weights_path models/zip_model --data_path data/data.parquet \
-                    --reward_values 0.0 0.25 0.5 0.75 1.0
+    python train_ziprc_joint_head.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+                                     --weights_path models/zip_model --data_path data/data.parquet \
+                                     --reward_values 0.0 0.25 0.5 0.75 1.0
 """
 
 from __future__ import annotations
@@ -40,7 +40,11 @@ from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import numpy as np
 
-from visualization import visualize_predictions, log_prediction_distributions, log_joint_distribution_grid
+from ziprc_training_visualization import (
+    visualize_predictions,
+    log_prediction_distributions,
+    log_joint_distribution_grid,
+)
 
 class ZIPDataset(Dataset):
     def __init__(self, table, max_length: int = 32_768, thinking_only: bool = False,

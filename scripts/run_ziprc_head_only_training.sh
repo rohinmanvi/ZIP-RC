@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --partition=defq
-#SBATCH --job-name=zip_joint_dist_no_kl
+#SBATCH --job-name=zip_head_only_training
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-gpu=12
-#SBATCH --output=/home/rohin/ZIP/logs/joint_distribution_train.out
-#SBATCH --error=/home/rohin/ZIP/logs/joint_distribution_train.err
+#SBATCH --output=/home/rohin/ZIP/logs/ziprc_head_only_training.out
+#SBATCH --error=/home/rohin/ZIP/logs/ziprc_head_only_training.err
 #SBATCH --account=liquidai
 #SBATCH --exclude=liquid-gpu-[054]
 
@@ -159,12 +159,11 @@ conda activate zip
 
 model_id="Qwen/Qwen3-1.7B"
 data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_topk32_full_10"
-weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_topk32_full_10_test"
+# weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_freeze_baseline"
+weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_freeze_baseline_test"
 distribution_token_id=151669
 learning_rate=3e-5
 label_column="value"
-kl_coefficient=0.00000001
 
 
 # model_id="Qwen/Qwen3-1.7B"
@@ -255,7 +254,8 @@ kl_coefficient=0.00000001
 
 
 visualization_freq=10
-max_steps=10000000
+# max_steps=10000000
+max_steps=100
 
 base_name=$(basename $data_path .parquet)_no_kl
 
@@ -275,25 +275,23 @@ echo "=================================================="
 # Training with --full_model_training but kl_coefficient=0 means no reference model is loaded
 # Set reward values based on label column
 if [ "$label_column" = "value" ]; then
-    # For soft values, use 7 bins as per train.py default
-    reward_values_arg=""  # Let train.py use its default 7 bins for value column
+    # For soft values, use 7 bins as per train_ziprc_joint_head.py default
+    reward_values_arg=""  # Let train_ziprc_head_only.py use its default 7 bins for value column
 else
     # For correctness, use binary
     reward_values_arg="--reward_values 0.0 1.0"
 fi
 
-python3 -u src/train.py \
+python3 -u src/train_ziprc_head_only.py \
     --model_id "$model_id" \
     --data_path "$data_path" \
     --weights_path "$weights_path" \
     --distribution_token_id $distribution_token_id \
     --learning_rate $learning_rate \
-    --full_model_training \
-    --label-column "$label_column" \
+    --label_column "$label_column" \
     $reward_values_arg \
     --visualization_freq $visualization_freq \
     --max_steps $max_steps \
-    --kl_coefficient $kl_coefficient \
     --dist-backend "ddp" 2>&1 | tee -a /home/rohin/ZIP/logs/train_${base_name}.log
 
 exit_code=${PIPESTATUS[0]}

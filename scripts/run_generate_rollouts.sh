@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --partition=defq
-#SBATCH --job-name=zip_data_gen
+#SBATCH --job-name=zip_generate_rollouts
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-gpu=12
-#SBATCH --output=/home/rohin/ZIP/logs/data.out
-#SBATCH --error=/home/rohin/ZIP/logs/data.err
+#SBATCH --output=/home/rohin/ZIP/logs/zip_generate_rollouts.out
+#SBATCH --error=/home/rohin/ZIP/logs/zip_generate_rollouts.err
 #SBATCH --account=liquidai
 #SBATCH --exclude=liquid-gpu-[054]
 
@@ -125,7 +125,7 @@ echo "  Output: $output_file"
 echo "  Prompts: $max_prompts (${thinking_samples} reasoning + ${non_thinking_samples} non-reasoning per prompt)"
 echo "  Start time: $(date)"
 
-python3 -u src/data.py \
+python3 -u src/generate_ziprc_rollouts.py \
     --model "$model" \
     --dataset "$dataset" \
     --prompt-column "$prompt_column" \

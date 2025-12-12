@@ -11,7 +11,7 @@ This variant implements the "frozen backbone + trainable output head" baseline:
 - KL to a reference model is removed, since the backbone cannot drift.
 
 Example usage:
-    python train_zip_head_only.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+    python train_ziprc_head_only.py --model_id deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
         --weights_path models/zip_head_only --data_path data/data.parquet
 """
 
@@ -30,7 +30,11 @@ from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import numpy as np
 
-from visualization import visualize_predictions, log_prediction_distributions, log_joint_distribution_grid
+from ziprc_training_visualization import (
+    visualize_predictions,
+    log_prediction_distributions,
+    log_joint_distribution_grid,
+)
 
 
 class ZIPDataset(Dataset):
