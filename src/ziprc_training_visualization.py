@@ -11,160 +11,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-def create_ascii_bar_chart(values, labels, title, max_width=50, display_as_percent=False):
-    """Create an ASCII bar chart for visualization.
-
-    If display_as_percent is True, prints values as percentages with one decimal place.
-    """
-    if values is None or len(values) == 0:
-        return f"\n{title}\n(No data)\n"
-    
-    # Use probability scale (0-1) instead of normalizing to max
-    lines = [f"\n{title}"]
-    lines.append("─" * (max_width + 20))
-    
-    for i, (val, label) in enumerate(zip(values, labels)):
-        # Clamp values to [0, 1] and scale to bar width
-        clamped_val = max(0, min(1, val))
-        bar_length = int(clamped_val * max_width)
-        bar = "█" * bar_length + "░" * (max_width - bar_length)
-        if display_as_percent:
-            lines.append(f"{label:<12} │{bar}│ {clamped_val*100:.1f}%")
-        else:
-            lines.append(f"{label:<12} │{bar}│ {val:.4f}")
-    
-    lines.append("─" * (max_width + 20))
-    return "\n".join(lines) + "\n"
-
-
-def log_inference_distribution(joint_probs, length_bins, num_length_bins, num_reward_states=2, reward_values=None, sample_idx=-1):
-    """Grid visualization of the joint distribution during inference.
-    Replaces the legacy bar‑chart view."""
-    if joint_probs is None:
-        return
-    # Convert to 2D [V, L] if needed
-    if hasattr(joint_probs, "detach"):
-        arr = joint_probs.detach().cpu().float().numpy()
-    else:
-        arr = np.array(joint_probs, dtype=float)
-    if arr.ndim == 1:
-        arr = arr.reshape(int(num_reward_states), int(num_length_bins))
-    log_joint_distribution_grid(
-        arr,
-        length_bins,
-        num_length_bins,
-        num_reward_states=num_reward_states,
-        reward_values=reward_values,
-        title_prefix=f"Predicted (sample {sample_idx})",
-    )
-
-
-def _make_length_labels(length_bins, num_length_bins):
-    labels = []
-    for i in range(num_length_bins):
-        start, end = length_bins[i], length_bins[i + 1] - 1
-        if end >= 32767:
-            labels.append(f"{start}+")
-        else:
-            labels.append(f"{start}-{end}")
-    return labels
-
-
-def log_before_after_pruning(before_dist, after_dist, length_bins, num_length_bins, num_reward_states=2, reward_values=None, sample_idx=-1, prune_at_bin=None):
-    """Grid visualize a joint distribution BEFORE and AFTER applying pruning."""
-    if before_dist is None or after_dist is None:
-        return
-    # Convert to numpy arrays if needed
-    if hasattr(before_dist, "detach"):
-        before = before_dist.detach().cpu().float().numpy()
-    else:
-        before = np.array(before_dist, dtype=float)
-    if hasattr(after_dist, "detach"):
-        after = after_dist.detach().cpu().float().numpy()
-    else:
-        after = np.array(after_dist, dtype=float)
-
-    suffix = f"  (prune_at_bin={prune_at_bin})" if prune_at_bin is not None else ""
-    log_joint_distribution_grid(
-        before, length_bins, num_length_bins, num_reward_states, reward_values,
-        title_prefix=f"BEFORE (sample {sample_idx}){suffix}"
-    )
-    log_joint_distribution_grid(
-        after, length_bins, num_length_bins, num_reward_states, reward_values,
-        title_prefix=f"AFTER  (sample {sample_idx}){suffix}"
-    )
-
-
-def log_max_distribution(prob_in_bin, bin_values, *, length_bins=None, title="Distribution of maximum"):
-    """ASCII visualize the distribution of the maximum across samples.
-
-    Args:
-        prob_in_bin: 1D iterable of probabilities for each bin where max falls
-        bin_values: 1D iterable of sorted bin representative values (same order as prob_in_bin)
-        length_bins: when visualizing length maxima, pass boundaries to label intervals
-        title: section title
-    """
-    if prob_in_bin is None:
-        return
-
-    # Convert torch tensors if needed
-    if hasattr(prob_in_bin, 'detach'):
-        probs = prob_in_bin.detach().cpu().float().numpy()
-    else:
-        probs = prob_in_bin
-
-    values = list(bin_values)
-
-    # Build labels
-    if length_bins is not None:
-        # Length case: labels are intervals; assume values correspond to midpoints derived from length_bins
-        # We will derive labels from boundaries in ascending order
-        num_length_bins = len(length_bins) - 1
-        labels = _make_length_labels(length_bins, num_length_bins)
-        # In general values may have been sorted; ensure we permute labels to match sorted order
-        # We reconstruct midpoints to map value->index
-        midpoints = [ (length_bins[i] + length_bins[i+1]) / 2 for i in range(num_length_bins) ]
-        # Build mapping from value to original index (robust to float issues via nearest)
-        def nearest_index(val):
-            diffs = [abs(val - m) for m in midpoints]
-            return int(np.argmin(diffs))
-        ordered_labels = [ labels[nearest_index(v)] for v in values ]
-        chart_title = title
-        print(create_ascii_bar_chart(probs, ordered_labels, chart_title, display_as_percent=True))
-    else:
-        # Value case
-        value_labels = [f"{float(v):.1f}" for v in values]
-        chart_title = title
-        print(create_ascii_bar_chart(probs, value_labels, chart_title, display_as_percent=True))
-
-def log_max_input_distributions(marginal_distributions, bin_values, ids=None, *, length_bins=None, title_prefix="Inputs for max"):
-    """ASCII visualize the marginal distributions that feed into the max.
-
-    Args:
-        marginal_distributions: list of 1D arrays/tensors (probabilities across bins), should be ordered to match bin_values order
-        bin_values: list of values corresponding to each bin (already sorted to match the marginals)
-        ids: optional list of identifiers (e.g., sample indices) corresponding to each marginal
-        length_bins: if provided, treat as length visualization and derive interval labels; otherwise treat as reward
-        title_prefix: header prefix for each chart
-    """
-    if not marginal_distributions:
-        return
-
-    # Build labels for bins
-    if length_bins is not None:
-        num_length_bins = len(length_bins) - 1
-        bin_labels = _make_length_labels(length_bins, num_length_bins)
-    else:
-        bin_labels = [f"{float(v):.1f}" for v in bin_values]
-
-    for idx, dist in enumerate(marginal_distributions):
-        if hasattr(dist, 'detach'):
-            values = dist.detach().cpu().float().numpy()
-        else:
-            values = dist
-        name = f"{title_prefix} - s={ids[idx]}" if ids is not None else f"{title_prefix} - #{idx}"
-        print(create_ascii_bar_chart(values, bin_labels, name, display_as_percent=True))
-
 def visualize_predictions(model, batch, distribution_token_id, num_bins, length_bins, device):
     """Extract joint distribution predictions vs ground truth at first and last labeled positions.
 
@@ -257,6 +103,17 @@ def _make_value_labels(reward_values, num_reward_states):
     return [str(v) for v in reward_values]
 
 
+def _make_length_labels(length_bins, num_length_bins):
+    labels = []
+    for i in range(num_length_bins):
+        start, end = length_bins[i], length_bins[i + 1] - 1
+        if end >= 32767:
+            labels.append(f"{start}+")
+        else:
+            labels.append(f"{start}-{end}")
+    return labels
+
+
 def create_ascii_heatmap(
     matrix2d,
     row_labels,
@@ -340,33 +197,3 @@ def log_joint_distribution_grid(prob_2d, length_bins, num_length_bins, num_rewar
     col_labels = [value_labels_unsorted[i] for i in value_perm]
 
     create_ascii_heatmap(grid_lv, row_labels, col_labels, f"{title_prefix} joint distribution (length high→low x value low→high)")
-
-
-def log_gaussian_params_list(items, title="Gaussian head parameters"):
-    """Print a compact summary of Gaussian parameters.
-
-    Args:
-        items: list of dicts, each with keys: label, mu_t, mu_y, sigma_t, sigma_y, rho
-        title: header title
-    """
-    if not items:
-        return
-    print(f"\n{'='*80}")
-    print(title)
-    print(f"{'='*80}")
-    for it in items:
-        try:
-            # Clamp printing ranges for readability
-            mu_t = max(-12.0, min(12.0, float(it['mu_t'])))
-            mu_y = max(-8.0, min(8.0, float(it['mu_y'])))
-            sigma_t = max(0.0, min(5.0, float(it['sigma_t'])))
-            sigma_y = max(0.0, min(5.0, float(it['sigma_y'])))
-            rho = max(-0.9, min(0.9, float(it['rho'])))
-            line = (f"[{it.get('label', '')}] "
-                    f"mu_t={mu_t: .4f}  mu_y={mu_y: .4f}  "
-                    f"sigma_t={sigma_t: .4f}  sigma_y={sigma_y: .4f}  "
-                    f"rho={rho: .4f}")
-            print(line)
-        except Exception:
-            print(str(it))
-    print(f"{'='*80}\n", flush=True)
