@@ -24,7 +24,7 @@ Example:
 """
 
 from __future__ import annotations
-import argparse, os, sys, time, traceback, random
+import argparse, os, sys, time, traceback
 from multiprocessing import get_context
 from typing import List, Tuple
 
@@ -86,44 +86,17 @@ def _resolve_parent_visible_gpus() -> List[int]:
     return list(range(n))
 
 def load_benchmark(name: str) -> Tuple[List[str], List[str]]:
-    """Load prompts and answers for the specified benchmark.
-
-    Mirrors the support in inference.py so we can generate rollouts for the same
-    suites (AIME, AMC, GSM8K, MATH-500, GPQA, etc.).
-    """
+    """Load prompts and answers for the supported math benchmarks."""
     benchmarks = {
         "gsm8k": ("openai/gsm8k", "main", "test", "question", "answer"),
         "math500": ("HuggingFaceH4/MATH-500", None, "test", "problem", "solution"),
         "amc2023": ("zwhe99/amc23", None, "test", "question", "answer"),
-        "aime2025": ("math-ai/aime25", None, "test", "problem", "answer"),
     }
 
     if name in benchmarks:
         dataset_name, config, split, q_col, a_col = benchmarks[name]
         ds = load_dataset(dataset_name, config, split=split) if config else load_dataset(dataset_name, split=split)
         return ds[q_col], ds[a_col]
-
-    if name == "gpqa":
-        ds = load_dataset("Idavidrein/gpqa", "gpqa_diamond", split="train")
-        prompts, answers = [], []
-        rnd = random.Random(42)
-
-        for row in ds:
-            answer_pool = [row["Correct Answer"], row["Incorrect Answer 1"],
-                           row["Incorrect Answer 2"], row["Incorrect Answer 3"]]
-            indices = list(range(4))
-            rnd.shuffle(indices)
-
-            options = [f"{letter}) {answer_pool[idx]}" for letter, idx in zip("ABCD", indices)]
-            correct_letter = "ABCD"[indices.index(0)]
-
-            prompt = (f"Return your final response within \\boxed{{}} and only include the letter choice (A, B, C, or D) as your final response.\n"
-                      f"Problem: {row['Question']}\nOptions: {', '.join(options)}\nAnswer:")
-
-            prompts.append(prompt)
-            answers.append(correct_letter)
-
-        return prompts, answers
 
     # Default to AIME 2024
     ds = load_dataset("Maxwell-Jia/AIME_2024")["train"]
@@ -321,11 +294,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", default=DEFAULTS["model"])
     p.add_argument("--out", default=DEFAULTS["output"])
     # Benchmark mode (optional). If set, overrides --dataset/--prompt-column/--answer-column.
-    p.add_argument("--benchmark", choices=["aime2024", "gsm8k", "amc2023", "aime2025", "math500", "gpqa"], default=None,
+    p.add_argument("--benchmark", choices=["aime2024", "gsm8k", "amc2023", "math500"], default=None,
                    help="Named benchmark to load (overrides --dataset mode when set)")
-    p.add_argument("--repeat-factor", type=int, default=1,
-                   help="Repeat prompts this many times (with shuffle) for robustness like inference sweeps")
-    p.add_argument("--repeat-seed", type=int, default=123, help="Shuffle seed when applying repeat-factor")
     p.add_argument("--dp-size", type=int, default=8,  # safer default than 8
                    help="Number of independent workers (no vLLM DP).")
     p.add_argument("--tp-size", type=int, default=1,
@@ -385,19 +355,10 @@ def main() -> None:
         else:
             answers = [None] * len(prompts)
 
-    # Optional repeat for robustness (shuffle applied)
-    if args.repeat_factor and args.repeat_factor > 1:
-        prompts = prompts * args.repeat_factor
-        answers = answers * args.repeat_factor
-        indices = list(range(len(prompts)))
-        random.Random(args.repeat_seed).shuffle(indices)
-        prompts = [prompts[i] for i in indices]
-        answers = [answers[i] for i in indices]
-
     # Log plan
     print(f"Using model: {args.model}")
     if args.benchmark:
-        print(f"Benchmark: {args.benchmark}  |  Prompts: {len(prompts)} (max {args.max_num_prompts})  |  repeat={args.repeat_factor}")
+        print(f"Benchmark: {args.benchmark}  |  Prompts: {len(prompts)} (max {args.max_num_prompts})")
     else:
         print(f"Prompts: {len(prompts)} (max {args.max_num_prompts})  |  split: {args.split}")
     print(f"Samples / prompt: {total_per_prompt}  "

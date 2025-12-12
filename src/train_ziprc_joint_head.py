@@ -228,7 +228,7 @@ def _logsumexp_linear_seqchunk(h: torch.Tensor,
 
 
 def compute_loss(model, batch, distribution_token_id, num_bins,
-                 ref_model=None, kl_coefficient=1.0, single_row_training=False):
+                 ref_model=None, kl_coefficient=1.0):
     """Compute training loss for the joint distribution prediction.
     
     The model learns to predict P(reward, tokens_remaining) at each position,
@@ -265,7 +265,7 @@ def compute_loss(model, batch, distribution_token_id, num_bins,
 
     # ---- KL divergence: teacher sparse (topk + min_p), student FULL log-softmax ----
     kl_loss = torch.tensor(0.0, device=device)
-    if ref_model and not single_row_training:
+    if ref_model:
         with torch.no_grad():
             ref_outputs = ref_model(input_ids=input_ids, output_hidden_states=True)
             ref_hidden_states = ref_outputs.hidden_states[-1]  # [B, S, E]
@@ -324,46 +324,6 @@ def compute_loss(model, batch, distribution_token_id, num_bins,
     
     return total_loss, kl_loss, distribution_loss
 
-
-def rows_mask_hook(rows: list[int]):
-    """Create a gradient hook that preserves gradients only for given rows."""
-    rows_set = set(rows)
-
-    def _hook(grad):
-        mask = torch.zeros_like(grad)
-        for r in rows_set:
-            mask[r] = 1
-        return grad * mask
-
-    return _hook
-
-# TODO(cleanup): This function doesn't properly restrict training to specific rows.
-# We have to use apply_row_mask every iteration instead. Consider removing this
-# function once we figure out why the gradient hooks aren't working.
-def make_specific_rows_trainable(model, vocab_rows: list[int]):
-    """Freeze all parameters except the specified vocabulary rows (and optional bias)."""
-    vocab_rows = [vocab_rows] if isinstance(vocab_rows, int) else vocab_rows
-    
-    for p in model.parameters(): p.requires_grad = False
-    
-    # Find the output weight matrix
-    param = next((p for n, p in model.named_parameters() if n.endswith("lm_head.weight")), None)
-    if param is None:
-        param = next((p for n, p in model.named_parameters() if n.endswith("embed_tokens.weight")), None)
-    if param is None:
-        raise RuntimeError("Could not find weight matrix to train.")
-    
-    param.requires_grad = True
-    param.register_hook(rows_mask_hook(vocab_rows))
-    
-    # Also train bias if present
-    if hasattr(model.lm_head, "bias") and model.lm_head.bias is not None and param is model.lm_head.weight:
-        model.lm_head.bias.requires_grad = True
-        model.lm_head.bias.register_hook(rows_mask_hook(vocab_rows))
-    
-    trainable_count = sum(p.requires_grad for p in model.parameters())
-    assert trainable_count in (1, 2)
-
 def print_trainable(model):
     print("\n=== Trainable parameters AFTER wrapping ===")
     total = 0
@@ -373,49 +333,11 @@ def print_trainable(model):
             total += p.numel()
     print(f"TOTAL trainable elements: {total}\n")
 
-def apply_row_mask(model, rows: list[int], ran_once: list):
-    """Zero every grad row except those in `rows` (runs every iteration)."""
-    rows_set = set(rows)
-
-    tgt = model
-    if hasattr(model, "module"):  # unwrap DDP
-        tgt = model.module
-    
-    if hasattr(tgt, "lm_head"):
-        w = tgt.lm_head.weight
-        b = getattr(tgt.lm_head, "bias", None)
-    else:
-        w = tgt.get_input_embeddings().weight
-        b = None
-    
-    if w.grad is not None:
-        mask = torch.zeros(w.grad.size(0), dtype=torch.bool, device=w.grad.device)
-        for r in rows_set:
-            if 0 <= r < mask.size(0):
-                mask[r] = True
-        # Zero out rows not in mask
-        w.grad[~mask] = 0
-    
-    if b is not None and b.grad is not None:
-        mask_b = torch.zeros(b.grad.size(0), dtype=torch.bool, device=b.grad.device)
-        for r in rows_set:
-            if 0 <= r < mask_b.size(0):
-                mask_b[r] = True
-        b.grad[~mask_b] = 0
-    
-    # one-time diagnostics
-    if ran_once and not ran_once[0]:
-        nz = (w.grad != 0).sum().item()
-        print("=== Non-zero grad elements AFTER masking ===")
-        print(f"  {w.grad.numel()} total; {nz} non-zero\n")
-        ran_once[0] = True
-
-
 def train(model, dataset, distribution_token_id, num_bins, weights_path,
           collate_fn, shuffle_data, seed, dtype, compile_mode, num_epochs, batch_size,
           gradient_accumulation_steps, learning_rate, min_learning_rate, warmup_ratio,
           weight_decay, beta_1, beta_2, grad_clip, wandb_project, dist_backend,
-          single_row_training, ref_model=None, kl_coefficient=1.0, max_steps=-1, 
+          ref_model=None, kl_coefficient=1.0, max_steps=-1,
           visualization_freq=100):
     
     # Setup distributed training
@@ -446,7 +368,6 @@ def train(model, dataset, distribution_token_id, num_bins, weights_path,
             "weight_decay": weight_decay, "compile_mode": compile_mode,
             "dist_backend": dist_backend, "distribution_token_id": distribution_token_id,
             "num_bins": num_bins, "num_reward_states": dataset.num_reward_states,
-            "single_row_training": single_row_training,
             "kl_coefficient": kl_coefficient, "max_steps": max_steps,
             "joint_distribution_bins": f"{dataset.num_length_bins} length × {dataset.num_reward_states} reward",
             "reward_values": dataset.reward_values
@@ -481,7 +402,6 @@ def train(model, dataset, distribution_token_id, num_bins, weights_path,
     # Training loop
     global_step = 0
     accum_losses = {"total": 0.0, "kl": 0.0, "distribution": 0.0}
-    ran_once = [False]
     
     for epoch in range(num_epochs):
         if distributed: sampler.set_epoch(epoch)
@@ -494,7 +414,7 @@ def train(model, dataset, distribution_token_id, num_bins, weights_path,
             # Forward pass
             with torch.autocast("cuda" if torch.cuda.is_available() else "cpu", dtype=getattr(torch, dtype)):
                 losses = compute_loss(model, batch, distribution_token_id, batch["num_bins"],
-                                    ref_model, kl_coefficient, single_row_training)
+                                    ref_model, kl_coefficient)
                 total_loss, kl_loss, distribution_loss = [l / gradient_accumulation_steps for l in losses]
             
             scaler.scale(total_loss).backward()
@@ -513,9 +433,6 @@ def train(model, dataset, distribution_token_id, num_bins, weights_path,
 
             # Optimizer step
             scaler.unscale_(optimizer)
-            if single_row_training:
-                distribution_rows = list(range(distribution_token_id, distribution_token_id + num_bins))
-                apply_row_mask(model, distribution_rows, ran_once)
             if grad_clip:
                 # Clip only required grads to reduce memory pressure
                 params = [p for p in model.parameters() if p.requires_grad and p.grad is not None]
@@ -602,11 +519,12 @@ def main_worker(local_rank, world_size, cfg):
     
     # Setup reference model if needed
     ref_model = None
-    if cfg.kl_coefficient > 0 and cfg.full_model_training:
+    if cfg.kl_coefficient > 0:
         ref_model = AutoModelForCausalLM.from_pretrained(
             cfg.model_id, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2"
         ).eval()
-        for p in ref_model.parameters(): p.requires_grad = False
+        for p in ref_model.parameters():
+            p.requires_grad = False
     
     # Load dataset to get num_bins
     dataset = ZIPDataset(
@@ -619,11 +537,6 @@ def main_worker(local_rank, world_size, cfg):
     )
     num_bins = dataset.num_bins
     
-    # Configure trainable parameters
-    if not cfg.full_model_training:
-        distribution_rows = list(range(cfg.distribution_token_id, cfg.distribution_token_id + num_bins))
-        make_specific_rows_trainable(model, distribution_rows)
-    
     # Save tokenizer on first rank
     if local_rank == 0 and not os.path.exists(cfg.weights_path):
         tokenizer.save_pretrained(cfg.weights_path)
@@ -633,7 +546,7 @@ def main_worker(local_rank, world_size, cfg):
           cfg.weights_path, ZIPDataset.collate_fn, True, 42, "bfloat16", cfg.compile_mode,
           cfg.num_epochs, cfg.batch_size, cfg.gradient_accumulation_steps, cfg.learning_rate,
           0.0, cfg.warmup_ratio, cfg.weight_decay, 0.9, 0.95, 1.0, cfg.wandb_project,
-          cfg.dist_backend, not cfg.full_model_training, ref_model, cfg.kl_coefficient, cfg.max_steps,
+          cfg.dist_backend, ref_model, cfg.kl_coefficient, cfg.max_steps,
           cfg.visualization_freq)
 
 
@@ -671,12 +584,6 @@ def parse_args():
     p.add_argument("--compile_mode", default="none", choices=["none", "default", "reduce-overhead", "max-autotune"])
     p.add_argument("--wandb_project", default="zip_training")
     p.add_argument("--dist-backend", choices=["ddp"], default="ddp", help="Distributed training backend")
-    
-    # Training mode
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--single_row_training", action="store_true", help="Only train vocabulary rows for distribution tokens (default)")
-    mode.add_argument("--full_model_training", action="store_true", help="Train the full model with multi-objective loss")
-    p.set_defaults(single_row_training=True)
     
     # Loss coefficient
     p.add_argument("--kl_coefficient", type=float, default=10.0, help="Coefficient for KL divergence loss from reference model")
