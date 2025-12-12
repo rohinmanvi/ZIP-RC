@@ -58,11 +58,11 @@ class InferenceDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.df.iloc[idx]
         ids_list = _to_int_list(row["input_ids"])
-        # Match train.py: drop final token, truncate to max_length
+        # Match train_ziprc_joint_head.py: drop final token, truncate to max_length
         ids = torch.tensor(ids_list, dtype=torch.long)[:-1][: self.max_length]
 
         lp_list = _to_int_list(row["label_positions"])
-        # Match train.py: shift positions by -1 and keep those within sequence
+        # Match train_ziprc_joint_head.py: shift positions by -1 and keep those within sequence
         label_positions = [p - 1 for p in lp_list if 0 <= p - 1 < len(ids)]
         return {"input_ids": ids, "label_positions": label_positions, "row_idx": int(idx)}
 

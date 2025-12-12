@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --partition=defq
-#SBATCH --job-name=zip_label_joint_values
+#SBATCH --job-name=zip_joint_scoring
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-gpu=6
-#SBATCH --output=/home/rohin/ZIP/logs/label_joint_values.out
-#SBATCH --error=/home/rohin/ZIP/logs/label_joint_values.err
+#SBATCH --output=/home/rohin/ZIP/logs/ziprc_joint_scoring.out
+#SBATCH --error=/home/rohin/ZIP/logs/ziprc_joint_scoring.err
 #SBATCH --account=liquidai
 
 set -euo pipefail
@@ -80,7 +80,7 @@ mkdir -p "$(dirname "$OUT_PARQUET")"
 
 base_name=$(basename "$IN_PARQUET" .parquet)
 
-python3 -u src/label_with_joint_value.py \
+python3 -u src/score_with_ziprc_joint_head.py \
   --model "$JOINT_MODEL" \
   --in-parquet "$IN_PARQUET" \
   --out-parquet "$OUT_PARQUET" \

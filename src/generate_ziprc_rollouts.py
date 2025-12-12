@@ -10,7 +10,7 @@ Design (robust version):
 - Strict shard merge by default (no accidental partial datasets).
 
 Example:
-    python src/data.py \
+    python src/generate_ziprc_rollouts.py \
         --model Qwen/Qwen3-0.6B \
         --dataset allenai/llama-3.1-tulu-3-8b-preference-mixture \
         --split train \

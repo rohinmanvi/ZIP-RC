@@ -8,8 +8,8 @@ This script can:
 3. Support consistency-based evaluation methods with answer extraction
 
 Example usage:
-    python src/label_and_evaluate.py --data results/results.parquet
-    python src/label_and_evaluate.py --data results/results.parquet --use-consistency
+    python src/evaluate_and_label_rollouts.py --data results/results.parquet
+    python src/evaluate_and_label_rollouts.py --data results/results.parquet --use-consistency
 """
 
 from __future__ import annotations
