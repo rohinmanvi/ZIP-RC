@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Label and evaluate ZIP-generated responses.
+Label and evaluate ZIP-generated responses for correctness.
 
 This script can:
 1. Label training data by checking correctness of ZIP-generated responses with a reference model
@@ -61,17 +61,6 @@ def get_eval_prompt(prompt: str, response: str, answer: str, thinking_token: str
         f'Proposed Solution:\n\n"\n{extract_response(response, thinking_token)}\n"'
     )
 
-def get_hallucination_eval_prompt(prompt: str, response: str, thinking_token: str) -> str:
-    """Craft the grading prompt for hallucination detection (no gold answer)."""
-    return (
-        "Your task is to determine whether the proposed response contains hallucinations or unsupported claims. "
-        "Start by identifying what the question asks. "
-        "Then, assess if the response introduces facts, references, or details that are not grounded in the question or that are likely fabricated. "
-        "Respond with ONLY the sentence \"Yes.\" if the response is grounded (no hallucination), or \"No.\" if it contains hallucination.\n\n"
-        f'Question:\n\n"\n{prompt}\n"\n\n'
-        f'Proposed Response:\n\n"\n{extract_response(response, thinking_token)}\n"'
-    )
-
 def get_answer_extraction_prompt(question: str, response: str, thinking_token: str) -> str:
     """Craft a prompt to extract the final answer from a solution."""
     return (
@@ -106,13 +95,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--enforce-eager", action="store_true", default=False, help="Run model in eager mode (disable CUDA graphs)")
     p.add_argument("--max-num-seqs", type=int, default=8, help="Upper bound on concurrently scheduled sequences to reduce memory")
     p.add_argument("--output-json", type=str, help="Path to save evaluation results as JSON file")
-    p.add_argument("--task", choices=["correctness", "hallucination"], default="correctness", help="Evaluation task type")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    metrics = {"data_file": args.data, "eval_model": args.model, "use_consistency": args.use_consistency, "task": args.task}
+    metrics = {"data_file": args.data, "eval_model": args.model, "use_consistency": args.use_consistency}
     
     df = pq.read_table(args.data).to_pandas()
     llm = LLM(model=args.model,
@@ -158,10 +146,7 @@ def main() -> None:
 
     inputs, row_indices = [], []
     for idx, row in df_finished.iterrows():
-        if args.task == "hallucination":
-            prompt_text = get_hallucination_eval_prompt(row["prompt"], row["response"], args.thinking_token)
-        else:
-            prompt_text = get_eval_prompt(row["prompt"], row["response"], row.get("answer", ""), args.thinking_token)
+        prompt_text = get_eval_prompt(row["prompt"], row["response"], row.get("answer", ""), args.thinking_token)
         chat_input = apply_hf_chat(tokenizer, prompt_text)
 
         if len(tokenizer(chat_input).input_ids) > 32_768:
@@ -195,7 +180,7 @@ def main() -> None:
     pq.write_table(pa.Table.from_pandas(df), args.data)
 
     row_to_answer = {}
-    if args.use_consistency and args.task == "correctness":
+    if args.use_consistency:
         extraction_inputs, extraction_indices = [], []
         total_prompts = prompts_with_no_finished = 0
         
