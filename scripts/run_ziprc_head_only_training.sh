@@ -1,303 +1,68 @@
 #!/bin/bash
-#SBATCH --partition=defq
-#SBATCH --job-name=zip_head_only_training
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=8
-#SBATCH --cpus-per-gpu=12
-#SBATCH --output=/home/rohin/ZIP/logs/ziprc_head_only_training.out
-#SBATCH --error=/home/rohin/ZIP/logs/ziprc_head_only_training.err
-#SBATCH --account=liquidai
-#SBATCH --exclude=liquid-gpu-[054]
 
-# Network configuration
-export PMI_DEBUG=1
-export MPI_ROOT=/usr/mpi/gcc/openmpi-4.1.7a1/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MPI_ROOT/lib
-export OMPI_MCA_btl_tcp_if_include=bond0
-export UCX_TLS=self,shm,tcp
-export NCCL_DEBUG=WARN
-export NCCL_P2P_LEVEL=NVL
-export NCCL_NET_GDR_LEVEL=PIX
-export NCCL_IB_HCA="=mlx5_0,mlx5_1,mlx5_13,mlx5_2,mlx5_5,mlx5_6,mlx5_7,mlx5_8"
-export NCCL_IB_PCI_RELAXED_ORDERING=1
-export NCCL_COLLNET_ENABLE=1
-export NCCL_SOCKET_IFNAME=bond0
-export LC_CTYPE=en_US.UTF-8
+# Train only the ZIP-RC output head (leaving the base model frozen).
+# Simplified configuration for general use.
+
+set -euo pipefail
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:256"
 
-cd $HOME/ZIP
-source ~/miniconda3/etc/profile.d/conda.sh
-conda deactivate && conda deactivate
-conda activate zip
+MODEL_ID="Qwen/Qwen3-1.7B"
+DATA_PATH="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_thinking_with_joint_values.parquet"
+WEIGHTS_PATH="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_freeze_baseline_test"
+DISTRIBUTION_TOKEN_ID=151669
+LEARNING_RATE=3e-5
+LABEL_COLUMN="value"
+KL_COEFFICIENT=0.0
+VISUALIZATION_FREQ=10
+MAX_STEPS=100
+LOG_DIR="logs"
 
-# Configurations
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="${SCRIPT_DIR%/scripts}"
+cd "$REPO_ROOT"
 
-# === Configuration Options ===
-# Uncomment the configuration you want to use
+mkdir -p "$LOG_DIR"
+BASE_NAME=$(basename "$DATA_PATH" .parquet)_no_kl
+LOG_FILE="$LOG_DIR/train_${BASE_NAME}.log"
 
-# Option 1: Train on hard correctness labels (original value model outputs)
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking_train_with_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_hallucination_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_hallucination_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen17b_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_hallucination_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen17b_non_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_non_thinking_hallucination_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-4B-Instruct-2507"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen4b_2507_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_4b_2507_thinking_hallucination_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-4B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen4b_06.parquet"
-# weights_path="models/zip_joint_distribution_qwen_4b_hallucination_no_kl_correctness_06"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-
-# Option 2: Train on hard correctness labels (math dataset)
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_math_data_qwen06b_thinking_train_with_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_math_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen06b_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_adaptivemath_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_non_thinking.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_non_thinking_adaptivemath_no_kl_correctness"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-4B"
-# data_path="/home/rohin/ZIP/data/zip_training_math_data_qwen4b_06.parquet"
-# weights_path="models/zip_joint_distribution_qwen_4b_math_no_kl_correctness_06"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="correct"
-
-# Option 3: Train on soft value labels from joint distribution model (hallucination)
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_hallucination_soft_values"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-# kl_coefficient=10.0
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_hallucination_soft_values_no_kl"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen06b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_adaptivemath_soft_values"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-# kl_coefficient=10.0
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen06b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_adaptivemath_soft_values_no_kl"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-# kl_coefficient=0.0
-
-
-model_id="Qwen/Qwen3-1.7B"
-data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_freeze_baseline"
-weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_freeze_baseline_test"
-distribution_token_id=151669
-learning_rate=3e-5
-label_column="value"
-
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_adaptivemath_soft_values_no_kl"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen17b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_hallucination_soft_values"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-# kl_coefficient=10.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen17b_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_thinking_hallucination_soft_values_no_kl"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-# kl_coefficient=0.0
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_non_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_non_thinking_adaptivemath_soft_values_no_kl"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-# kl_coefficient=0.0
-
-
-# model_id="Qwen/Qwen3-1.7B"
-# data_path="/home/rohin/ZIP/data/zip_training_adaptivemath_data_qwen17b_non_thinking_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_17b_non_thinking_adaptivemath_soft_values_topk32_full_25"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-# kl_coefficient=25.0
-
-
-# Option 4: Train on soft value labels from joint distribution model (math)
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_math_data_qwen06b_thinking_06_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_math_soft_values_06"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking_06_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_hallucination_soft_values_06"
-# distribution_token_id=151669
-# learning_rate=1e-4
-# label_column="value"
-
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_math_data_qwen06b_thinking_train_with_joint_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_06b_thinking_math_soft_values_with_kl"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-
-# model_id="Qwen/Qwen3-4B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen4b_train_with_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_4b_hallucination_no_kl"
-# distribution_token_id=151669
-# learning_rate=3e-5
-
-# model_id="Qwen/Qwen3-4B"
-# data_path="/home/rohin/ZIP/data/zip_training_math_data_qwen4b_train_with_values.parquet"
-# weights_path="models/zip_joint_distribution_qwen_4b_math_no_kl"
-# distribution_token_id=151669
-# learning_rate=3e-5
-
-
-# Test with bigger model
-# model_id="Qwen/Qwen3-0.6B"
-# data_path="/home/rohin/ZIP/data/zip_training_hallucination_data_qwen06b_thinking_06_with_joint_values.parquet"
-# weights_path="models/test_qwen17b_thinking_hallucination_soft_values_with_kl"
-# distribution_token_id=151669
-# learning_rate=3e-5
-# label_column="value"
-# kl_coefficient=10.0
-
-
-visualization_freq=10
-# max_steps=10000000
-max_steps=100
-
-base_name=$(basename $data_path .parquet)_no_kl
+if [ "$LABEL_COLUMN" = "value" ]; then
+    REWARD_VALUES_ARG=""
+else
+    REWARD_VALUES_ARG="--reward_values 0.0 1.0"
+fi
 
 echo "=================================================="
-echo "Starting ZIP Joint Distribution Training (No KL)"
+echo "Starting ZIP Head-Only Training"
 echo "=================================================="
-echo "  Model: $model_id"
-echo "  Data: $data_path"
-echo "  Output: $weights_path"
-echo "  Distribution start token ID: $distribution_token_id"
-echo "  Learning rate: $learning_rate"
-echo "  Label column: $label_column"
-echo "  KL coefficient: $kl_coefficient (no reference model)"
+echo "  Model: $MODEL_ID"
+echo "  Data: $DATA_PATH"
+echo "  Output: $WEIGHTS_PATH"
+echo "  Distribution start token ID: $DISTRIBUTION_TOKEN_ID"
+echo "  Learning rate: $LEARNING_RATE"
+echo "  Label column: $LABEL_COLUMN"
+echo "  KL coefficient: $KL_COEFFICIENT"
 echo "  Start time: $(date)"
 echo "=================================================="
 
-# Training with --full_model_training but kl_coefficient=0 means no reference model is loaded
-# Set reward values based on label column
-if [ "$label_column" = "value" ]; then
-    # For soft values, use 7 bins as per train_ziprc_joint_head.py default
-    reward_values_arg=""  # Let train_ziprc_head_only.py use its default 7 bins for value column
-else
-    # For correctness, use binary
-    reward_values_arg="--reward_values 0.0 1.0"
-fi
-
 python3 -u src/train_ziprc_head_only.py \
-    --model_id "$model_id" \
-    --data_path "$data_path" \
-    --weights_path "$weights_path" \
-    --distribution_token_id $distribution_token_id \
-    --learning_rate $learning_rate \
-    --label_column "$label_column" \
-    $reward_values_arg \
-    --visualization_freq $visualization_freq \
-    --max_steps $max_steps \
-    --dist-backend "ddp" 2>&1 | tee -a /home/rohin/ZIP/logs/train_${base_name}.log
+    --model_id "$MODEL_ID" \
+    --data_path "$DATA_PATH" \
+    --weights_path "$WEIGHTS_PATH" \
+    --distribution_token_id "$DISTRIBUTION_TOKEN_ID" \
+    --learning_rate "$LEARNING_RATE" \
+    --label_column "$LABEL_COLUMN" \
+    $REWARD_VALUES_ARG \
+    --visualization_freq "$VISUALIZATION_FREQ" \
+    --max_steps "$MAX_STEPS" \
+    --dist-backend "ddp" 2>&1 | tee -a "$LOG_FILE"
 
 exit_code=${PIPESTATUS[0]}
 echo "=================================================="
 echo "Training completed with exit code: $exit_code at $(date)"
-[ -d "$weights_path" ] && echo "Model size: $(du -sh $weights_path | cut -f1)"
+if [ -d "$WEIGHTS_PATH" ]; then
+  echo "Model size: $(du -sh "$WEIGHTS_PATH" | cut -f1)"
+fi
 echo "=================================================="
 
-exit $exit_code
+exit "$exit_code"
