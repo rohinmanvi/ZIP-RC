@@ -5,6 +5,7 @@ zero-overhead joint reward–cost prediction for adaptive sampling. The steps be
 all helper scripts; copy/paste the commands and adjust paths to your setup.
 
 ## Environment
+Run commands from the repository root; adjust paths if you store data elsewhere.
 ```bash
 conda env create -f environment.yml -n ziprc
 conda activate ziprc
@@ -81,5 +82,5 @@ python -u src/score_with_ziprc_joint_head.py \
 - Adjust dataset paths, model IDs, and token IDs to match your checkpoints.
 - All commands run without scheduler-specific wrappers; add your own launchers if
 you need SLURM/torchrun integration.
-- For larger jobs, set `CUDA_VISIBLE_DEVICES` and `MASTER_PORT/ADDR` as needed
-before running the commands above.
+- Set `CUDA_VISIBLE_DEVICES` (and `MASTER_PORT`/`MASTER_ADDR` for multi-GPU)
+before running if you need to limit or coordinate devices.
