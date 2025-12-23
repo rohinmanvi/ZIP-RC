@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="Zero-Overhead Introspection for Adaptive Test-Time Compute">
+  <meta name="keywords" content="LLMs, test-time compute, adaptive inference, introspection, reward prediction, cost prediction">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zero-Overhead Introspection for Adaptive Test-Time Compute</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/favicon.svg">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+<body>
+
+<nav class="navbar" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div class="navbar-menu">
+    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+      <a class="navbar-item" href="#abstract">Abstract</a>
+      <a class="navbar-item" href="#method">Method</a>
+      <a class="navbar-item" href="#results">Results</a>
+      <a class="navbar-item" href="#bibtex">BibTeX</a>
+    </div>
+  </div>
+</nav>
+
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">Zero-Overhead Introspection <br> for Adaptive Test-Time Compute</h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://rohinmanvi.github.io/">Rohin Manvi</a><sup>*</sup>,</span>
+            <span class="author-block">
+              <a href="https://jxihong.github.io/joeyhong/">Joey Hong</a>,</span>
+            <span class="author-block">
+              <a href="https://tseyde.github.io/">Tim Seyde</a>,</span>
+            <span class="author-block">
+              <a href="https://www.linkedin.com/in/maxime-labonne/?originalSubdomain=uk">Maxime Labonne</a>,</span>
+            <span class="author-block">
+              <a href="https://mlech26l.github.io/">Mathias Lechner</a>,
+            </span>
+            <span class="author-block">
+              <a href="https://people.eecs.berkeley.edu/~svlevine/">Sergey Levine</a>
+            </span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">UC Berkeley &middot; MIT CSAIL &middot; Liquid AI</span>
+          </div>
+
+          <div class="is-size-6 publication-authors">
+            <span class="author-block"><sup>*</sup>Corresponding author: <a href="mailto:rohinm@berkeley.edu">rohinm@berkeley.edu</a></span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <span class="link-block">
+                <a href="https://arxiv.org/pdf/2512.01457.pdf"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Paper</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2512.01457"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/rohinmanvi/ZIP-RC"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                  </a>
+              </span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <img class="teaser-image" src="static/images/teaser.png" alt="ZIP-RC overview figure" />
+      <h2 class="subtitle has-text-centered">
+        ZIP-RC provides real-time reward–cost introspection and uses it to allocate test-time compute adaptively.
+      </h2>
+    </div>
+  </div>
+</section>
+
+
+<section class="section" id="abstract">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+	      <div class="column is-four-fifths">
+	        <h2 class="title is-3">Abstract</h2>
+	        <div class="content has-text-justified">
+	          <p>
+	            Large language models excel at reasoning but lack key aspects of <em>introspection</em>, including the ability to anticipate their own success and the computation required to achieve it. Humans use real-time introspection to decide how much effort to invest, when to make multiple attempts, when to stop, and when to signal success or failure. Without this ability, LLMs struggle to make intelligent meta-cognition decisions. Test-time scaling methods such as Best-of-N drive up cost and latency by using a fixed budget of samples regardless of the marginal benefit of each one at any point in generation, and the absence of confidence signals can mislead people, prevent appropriate escalation to better tools, and undermine trustworthiness. Learned verifiers or reward models can provide confidence estimates, but do not enable adaptive inference and add substantial inference cost by requiring extra models or forward passes. We present ZIP-RC, which equips models with <u>z</u>ero-overhead <u>i</u>ntrospective <u>p</u>redictions of <u>r</u>eward and <u>c</u>ost. At every token during generation, ZIP-RC reuses reserved or unused logits in the same forward pass as next-token prediction to output a joint distribution over final reward and remaining length—no extra models, architecture change, or inference overhead. This full joint distribution is used to compute a sampling utility which is the linear combination of the expected maximum reward, total compute, and latency of set of samples if generated to completion. During inference, we maximize this utility with meta-actions that determine which prefix of tokens to continue or initiate sampling from. On mixed-difficulty mathematical benchmarks, ZIP-RC improves accuracy by up to 12% over majority voting at equal or lower average cost, and traces smooth Pareto frontiers between quality, compute, and latency. By providing real-time reward–cost introspection, ZIP-RC allows models to reason adaptively and more efficiently.
+	          </p>
+	        </div>
+	      </div>
+	    </div>
+    <!--/ Abstract. -->
+  </div>
+</section>
+
+<section class="section" id="method">
+  <div class="container is-max-desktop content">
+    <h2 class="title">Method</h2>
+    <div class="content has-text-justified">
+      <p>
+        ZIP-RC trains an LLM to expose real-time introspection signals without any additional inference-time compute.
+      </p>
+      <ul>
+        <li><strong>Zero overhead:</strong> reserve a small contiguous slice of the vocabulary and interpret its logits as auxiliary predictions; mask those tokens so they are never sampled.</li>
+        <li><strong>Joint reward–cost prediction:</strong> at each token, predict a joint distribution over final reward (e.g., correctness) and remaining generation length.</li>
+        <li><strong>Adaptive parallel decoding:</strong> use the joint to compute a sampling utility that trades off expected best reward, compute, and latency, then dynamically continue/spawn/pause samples.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="results">
+  <div class="container is-max-desktop content">
+    <h2 class="title">Results</h2>
+    <div class="content has-text-justified">
+      <p>
+        ZIP-RC’s joint predictions are calibrated enough to guide inference, enabling controllable tradeoffs between accuracy, compute, and latency.
+      </p>
+    </div>
+
+    <div class="content">
+      <img src="static/images/first_joint_visual_w_groundtruth.png" alt="ZIP-RC joint distribution predictions vs. ground truth" height="100%">
+      <p class="has-text-centered">
+        Joint reward–cost predictions (ZIP-RC) compared to ground-truth estimates from rollouts.
+      </p>
+    </div>
+
+    <div class="content">
+      <img src="static/images/MODELSxBENCHES_COMPOSITE_alpha0p1_and_1p0.png" alt="ZIP-RC sampling Pareto frontiers across models and benchmarks" height="100%">
+      <p class="has-text-centered">
+        ZIP-RC sampling traces Pareto frontiers and improves accuracy at matched or lower generation cost.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="bibtex">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@misc{manvi2025zerooverheadintrospection,
+  title={Zero-Overhead Introspection for Adaptive Test-Time Compute},
+  author={Rohin Manvi and Joey Hong and Tim Seyde and Maxime Labonne and Mathias Lechner and Sergey Levine},
+  year={2025},
+  eprint={2512.01457},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  url={https://arxiv.org/abs/2512.01457},
+}</code></pre>
+  </div>
+</section>
+
+
+<footer class="footer">
+  <div class="container">
+    <div class="content has-text-centered">
+      <!-- <a class="icon-link"
+         href="https://homes.cs.washington.edu/~kpar/nerfies/videos/nerfies_paper.pdf">
+        <i class="fas fa-file-pdf"></i>
+      </a> -->
+      <!-- <a class="icon-link" href="https://github.com/keunhong" class="external-link" disabled>
+        <i class="fab fa-github"></i>
+      </a> -->
+    </div>
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            This website is licensed under a <a rel="license"
+                                                href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+          <p>
+            This website is borrowed from the <a
+              href="https://github.com/nerfies/nerfies.github.io">source code</a> of the Nerfies website.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
