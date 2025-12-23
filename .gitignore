@@ -1,0 +1,26 @@
+# Ignore everything
+/*
+
+# But not these directories
+!/src/
+!/assets/
+!/docs/
+!/scripts/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Track key docs
+!README.md
+!LICENSE
+!.gitignore
+
+# Track environment files
+!environment.yml
+!environment.lock.yml
+# Ignore temporary scratch area
+scratch/
